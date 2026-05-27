@@ -1,0 +1,6 @@
+{
+  "name": "Darzi",
+  "description": "Modern premium custom corporate womenswear brand with AI size recommendations and personalized tailoring",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
