@@ -1,47 +1,37 @@
 import React from "react";
-import { View, Text, TextInput, FlatList, Image, TouchableOpacity, Pressable } from "react-native";
+import { View, Text, TextInput, FlatList, Image, TouchableOpacity, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Search, SlidersHorizontal, Sparkles } from "lucide-react-native";
-import { useFitStore } from "../../store/useFitStore";
+import { apiService } from "../../services/api";
+import { Product } from "../../types";
 
 export default function MobileDiscoverScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCat, setSelectedCat] = React.useState("All");
+  const [items, setItems] = React.useState<Product[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
 
   const categories = ["All", "Suits", "Blazers", "Trousers", "Dresses", "Shirts"];
 
-  const MOCK_ITEMS = [
-    {
-      id: "p-pragati",
-      name: "Pragati Blazer",
-      tagline: "Contours of leadership",
-      category: "Blazers",
-      basePrice: 9400,
-      imageUrl: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=600",
-      outOfStock: false,
-    },
-    {
-      id: "p-heritage",
-      name: "Heritage Banarasi",
-      tagline: "Authentic royal brocade",
-      category: "Suits",
-      basePrice: 16800,
-      imageUrl: "https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=600",
-      outOfStock: false,
-    },
-    {
-      id: "p-chiffon",
-      name: "Sultry Chiffon Dress",
-      tagline: "Breathtaking evening shift",
-      category: "Dresses",
-      basePrice: 7800,
-      imageUrl: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&q=80&w=600",
-      outOfStock: true,
-    }
-  ];
+  React.useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setError("");
+        setItems(await apiService.getProducts());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to load catalog");
+        setItems([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const filteredItems = MOCK_ITEMS.filter(item => {
+    loadProducts();
+  }, []);
+
+  const filteredItems = items.filter(item => {
     const matchCat = selectedCat === "All" || item.category === selectedCat;
     const matchQuery = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                       item.tagline.toLowerCase().includes(searchQuery.toLowerCase());
@@ -99,6 +89,11 @@ export default function MobileDiscoverScreen() {
       </View>
 
       {/* Product List Grid */}
+      {isLoading ? (
+        <View className="py-20 justify-center items-center">
+          <ActivityIndicator size="small" color="#c5a880" />
+        </View>
+      ) : (
       <FlatList
         data={filteredItems}
         keyExtractor={(item) => item.id}
@@ -107,7 +102,7 @@ export default function MobileDiscoverScreen() {
         columnWrapperStyle={{ justifyContent: "space-between" }}
         ListEmptyComponent={
           <View className="py-20 justify-center items-center text-center">
-            <Text className="font-serif italic text-stone-500 text-sm">No silhouettes match search matrix</Text>
+            <Text className="font-serif italic text-stone-500 text-sm">{error || "No silhouettes match search matrix"}</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -156,6 +151,7 @@ export default function MobileDiscoverScreen() {
           </Pressable>
         )}
       />
+      )}
 
     </View>
   );

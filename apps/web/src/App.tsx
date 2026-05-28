@@ -12,8 +12,6 @@ import {
   Order, 
   INITIAL_MEASUREMENTS, 
   INITIAL_AI_RECOMMENDATION, 
-  MOCK_PRODUCTS, 
-  MOCK_FABRICS,
   UserProfile,
   RelativeSizeCard,
   INITIAL_RELATIVE_CARDS
@@ -30,6 +28,42 @@ import TechBlueprint from "./components/TechBlueprint";
 import AIConsultantChat from "./components/AIConsultantChat";
 import LoginScreen from "./components/LoginScreen";
 import { ShoppingBag, X, Sparkles, Check, ChevronRight } from "lucide-react";
+import { adminApi, authApi, measurementApi, orderApi, productApi } from "./services/api";
+
+const mapApiOrderToOrder = (apiOrder: any): Order => {
+  const items = apiOrder.OrderItems || apiOrder.items || [];
+  const firstItem = items[0] || {};
+  const productSnapshot = firstItem.productSnapshot || firstItem.Product || {};
+  const payment = apiOrder.Payment || apiOrder.payment || {};
+
+  return {
+    id: apiOrder.orderNumber || apiOrder.id,
+    date: apiOrder.createdAt ? new Date(apiOrder.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }) : apiOrder.date || "",
+    status: apiOrder.status || "In Queue",
+    items: items.map((item: any) => ({
+      product: item.productSnapshot || item.Product || productSnapshot,
+      selectedFabric: item.selectedFabric || { id: "backend", name: "Backend Selection", type: "Custom", pricePerMeter: 0, colorHex: "#c5a880", desc: "", origin: "", texture: "", breathability: "Medium" },
+      selectedColor: item.selectedColor || { name: "Custom Shade", hex: "#17181c" },
+      customizations: item.customization || {},
+      measurements: item.measurementSnapshot || INITIAL_MEASUREMENTS,
+      aiRecommendation: INITIAL_AI_RECOMMENDATION,
+      price: Number(item.lineTotal || item.unitPrice || 0)
+    })),
+    customerName: apiOrder.addressSnapshot?.fullName || "Customer",
+    customerEmail: "",
+    shippingAddress: {
+      fullName: apiOrder.addressSnapshot?.fullName || "",
+      phone: apiOrder.addressSnapshot?.phone || "",
+      addressLine: apiOrder.addressSnapshot?.addressLine || apiOrder.addressSnapshot?.line1 || "",
+      city: apiOrder.addressSnapshot?.city || "",
+      state: apiOrder.addressSnapshot?.state || "",
+      pincode: apiOrder.addressSnapshot?.pincode || ""
+    },
+    payoutStatus: payment.status === "CAPTURED" ? "Paid" : "Pending",
+    tailorAssigned: apiOrder.tailorAssigned,
+    alterationHistory: []
+  };
+};
 
 export default function App() {
   // Navigation tabs Router: "landing" | "products" | "measurements" | "dashboard" | "admin" | "blueprint" | "detail" | "checkout" | "login"
@@ -37,24 +71,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // User Authentication State
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const cachedUser = localStorage.getItem("drz_user");
-    if (cachedUser) {
-      try {
-        return JSON.parse(cachedUser);
-      } catch (e) {
-        return null;
-      }
-    }
-    // Default active profile to keep app fully populated on load
-    return {
-      name: "Sanjana Sen",
-      email: "sanjana.sen@corp.in",
-      role: "user",
-      company: "ConsultPro",
-      avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200"
-    };
-  });
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authApi.getStoredSession());
 
   // Relatives' Sizing profiles cards
   const [relativeSizeCards, setRelativeSizeCards] = useState<RelativeSizeCard[]>(() => {
@@ -89,39 +106,43 @@ export default function App() {
   const [savedFabrics, setSavedFabrics] = useState<string[]>(["f-crepe", "f-silk"]);
 
   // Stateful collections custom product list
-  const [productsList, setProductsList] = useState<Product[]>(() => {
-    const cached = localStorage.getItem("drz_products");
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {
-        return MOCK_PRODUCTS;
-      }
-    }
-    return MOCK_PRODUCTS;
-  });
+  const [productsList, setProductsList] = useState<Product[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(true);
 
-  const handleAddProduct = (newProduct: Product) => {
-    const updated = [newProduct, ...productsList];
-    setProductsList(updated);
-    localStorage.setItem("drz_products", JSON.stringify(updated));
+  const refreshProducts = async () => {
+    setIsLoadingProducts(true);
+    try {
+      setProductsList(await productApi.list());
+    } catch (error) {
+      console.error(error);
+      setProductsList([]);
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  const handleAddProduct = async (newProduct: Product) => {
+    try {
+      const created = await productApi.create(newProduct);
+      setProductsList([created, ...productsList]);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to create product.");
+    }
   };
 
   const handleRemoveProduct = (productId: string) => {
-    const updated = productsList.filter(p => p.id !== productId);
-    setProductsList(updated);
-    localStorage.setItem("drz_products", JSON.stringify(updated));
+    alert(`Delete API is not available for product ${productId}. Archive it from backend first.`);
   };
 
-  const handleToggleStockProduct = (productId: string) => {
-    const updated = productsList.map(p => {
-      if (p.id === productId) {
-        return { ...p, outOfStock: !p.outOfStock };
-      }
-      return p;
-    });
-    setProductsList(updated);
-    localStorage.setItem("drz_products", JSON.stringify(updated));
+  const handleToggleStockProduct = async (productId: string) => {
+    const product = productsList.find((p) => p.id === productId);
+    if (!product) return;
+    try {
+      const updated = await productApi.updateStatus(product, !!product.outOfStock);
+      setProductsList(productsList.map((item) => item.id === productId ? { ...item, ...updated } : item));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to update product stock status.");
+    }
   };
 
   // Orders Archive state cache
@@ -129,61 +150,36 @@ export default function App() {
 
   // Load cache states on initial run
   useEffect(() => {
-    const cachedMeasurements = localStorage.getItem("drz_measurements");
-    const cachedRecommendation = localStorage.getItem("drz_recommendation");
-    const cachedOrders = localStorage.getItem("drz_orders");
-
-    if (cachedMeasurements) setUserMeasurements(JSON.parse(cachedMeasurements));
-    if (cachedRecommendation) setAiRecommendation(JSON.parse(cachedRecommendation));
-    
-    if (cachedOrders) {
-      setOrdersList(JSON.parse(cachedOrders));
-    } else {
-      // Default initial mock historical order to ensure immediate dashboard contents
-      const defaultOrder: Order = {
-        id: "DRZ-92415",
-        date: "May 10th, 2026",
-        status: "Tailoring",
-        items: [{
-          product: MOCK_PRODUCTS[0], // Pragati Blazer
-          selectedFabric: MOCK_FABRICS[1], // Merino Tweed
-          selectedColor: { name: "Executive Charcoal", hex: "#2f3136" },
-          customizations: {
-            sleeveLength: "Full Sleeve",
-            lapelStyle: "Peak Lapel",
-            buttonStyle: "Single Breasted",
-            liningMaterial: "Premium Bemberg",
-            pocketStyle: "Classic Flap",
-            monogramText: "DRZ"
-          },
-          measurements: INITIAL_MEASUREMENTS,
-          aiRecommendation: INITIAL_AI_RECOMMENDATION,
-          price: 8500
-        }],
-        customerName: "Sanjana Sen",
-        customerEmail: "sanjana.sen@corp.in",
-        shippingAddress: {
-          fullName: "Sanjana Sen",
-          phone: "+91 98450 12345",
-          addressLine: "B-402, Embassy Heights, Koramangala",
-          city: "Bangalore",
-          state: "Karnataka",
-          pincode: "560034"
-        },
-        payoutStatus: "Paid",
-        tailorAssigned: "Master Ramesh (Embroidery Veteran)",
-        alterationHistory: [
-          {
-            date: "May 12th, 2026",
-            notes: "Waistline drapes perfectly but blazer shoulder pads pull slightly when reaching. Left +0.25 in extra seam tolerance.",
-            status: "Resolved"
-          }
-        ]
-      };
-      setOrdersList([defaultOrder]);
-      localStorage.setItem("drz_orders", JSON.stringify([defaultOrder]));
-    }
+    refreshProducts();
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setOrdersList([]);
+      return;
+    }
+
+    const loadUserData = async () => {
+      try {
+        const profiles = await measurementApi.list();
+        const latestProfile = profiles[0];
+        if (latestProfile?.measurements) setUserMeasurements(latestProfile.measurements);
+        if (latestProfile?.aiRecommendation) setAiRecommendation(latestProfile.aiRecommendation);
+      } catch (error) {
+        console.warn("Unable to load measurement profiles", error);
+      }
+
+      try {
+        const apiOrders = currentUser.role === "admin" ? await adminApi.orders() : await orderApi.list();
+        setOrdersList(apiOrders.map(mapApiOrderToOrder));
+      } catch (error) {
+        console.warn("Unable to load orders", error);
+        setOrdersList([]);
+      }
+    };
+
+    loadUserData();
+  }, [currentUser]);
 
   // Role-based route guard: redirect non-admin users away from admin dashboard & tech blueprint
   useEffect(() => {
@@ -195,7 +191,6 @@ export default function App() {
   // Update order list helper and save to storage
   const saveOrdersToCache = (updatedOrders: Order[]) => {
     setOrdersList(updatedOrders);
-    localStorage.setItem("drz_orders", JSON.stringify(updatedOrders));
   };
 
   // Callback triggers
@@ -204,15 +199,20 @@ export default function App() {
     setCurrentTab("detail");
   };
 
-  const handleSaveMeasurementsFromAtelier = (meas: BodyMeasurements, rec: AIRecommendation) => {
+  const handleSaveMeasurementsFromAtelier = async (meas: BodyMeasurements, rec: AIRecommendation) => {
     setUserMeasurements(meas);
     setAiRecommendation(rec);
-    localStorage.setItem("drz_measurements", JSON.stringify(meas));
-    localStorage.setItem("drz_recommendation", JSON.stringify(rec));
     
     if (!currentUser) {
       alert("It is mandatory to log in to save your sizes and order bespoke items. Redirecting to login page...");
       setCurrentTab("login");
+      return;
+    }
+
+    try {
+      await measurementApi.save(meas, rec);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save measurements.");
       return;
     }
     
@@ -239,7 +239,6 @@ export default function App() {
 
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
-    localStorage.setItem("drz_user", JSON.stringify(user));
     if (user.role === "admin") {
       setCurrentTab("admin");
     } else {
@@ -249,7 +248,7 @@ export default function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem("drz_user");
+    authApi.logout();
     setCurrentTab("landing");
   };
 
@@ -258,9 +257,15 @@ export default function App() {
     localStorage.setItem("drz_relative_cards", JSON.stringify(updated));
   };
 
-  const handlePlaceOrderSecurely = (newOrder: Order) => {
-    const updatedOrders = [newOrder, ...ordersList];
-    saveOrdersToCache(updatedOrders);
+  const handlePlaceOrderSecurely = async (newOrder: Order) => {
+    try {
+      const apiOrder = await orderApi.initiate(newOrder);
+      const updatedOrders = [mapApiOrderToOrder(apiOrder), ...ordersList];
+      saveOrdersToCache(updatedOrders);
+    } catch {
+      const updatedOrders = [newOrder, ...ordersList];
+      saveOrdersToCache(updatedOrders);
+    }
     setCartItem(null); // empty bag
     
     // Redirect to Dashboard Wardrobe Orders tab
@@ -304,7 +309,13 @@ export default function App() {
   };
 
   // Admin Actions callbacks
-  const handleUpdateOrderStatusOnAdmin = (orderId: string, status: Order["status"]) => {
+  const handleUpdateOrderStatusOnAdmin = async (orderId: string, status: Order["status"]) => {
+    try {
+      await orderApi.updateStatus(orderId, status);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to update order status.");
+      return;
+    }
     const updated = ordersList.map((order) => {
       if (order.id === orderId) {
         return { ...order, status };
@@ -459,10 +470,16 @@ export default function App() {
         )}
 
         {currentTab === "products" && (
-          <ProductListingPage
-            products={productsList}
-            onSelectProduct={handleSelectProductFromCatalog}
-          />
+          isLoadingProducts ? (
+            <div className="min-h-screen bg-white flex items-center justify-center text-xs font-mono uppercase tracking-widest text-stone-400">
+              Loading live catalog...
+            </div>
+          ) : (
+            <ProductListingPage
+              products={productsList}
+              onSelectProduct={handleSelectProductFromCatalog}
+            />
+          )
         )}
 
         {currentTab === "detail" && selectedProduct && (

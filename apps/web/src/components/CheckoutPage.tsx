@@ -27,18 +27,18 @@ export default function CheckoutPage({
   userMeasurements
 }: CheckoutPageProps) {
   // Address parameters
-  const [fullName, setFullName] = useState<string>("Sanjana Sen");
-  const [phone, setPhone] = useState<string>("+91 98450 12345");
-  const [addressLine, setAddressLine] = useState<string>("B-402, Embassy Heights, Koramangala");
-  const [city, setCity] = useState<string>("Bangalore");
-  const [state, setState] = useState<string>("Karnataka");
-  const [pincode, setPincode] = useState<string>("560034");
+  const [fullName, setFullName] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
+  const [addressLine, setAddressLine] = useState<string>("");
+  const [city, setCity] = useState<string>("");
+  const [state, setState] = useState<string>("");
+  const [pincode, setPincode] = useState<string>("");
 
   // Payment triggers
   const [paymentStep, setPaymentStep] = useState<"idle" | "razorpay_gateway" | "processing" | "success">("idle");
-  const [cardNumber, setCardNumber] = useState<string>("4111 2222 3333 4444");
-  const [expiry, setExpiry] = useState<string>("12/28");
-  const [cvv, setCvv] = useState<string>("321");
+  const [cardNumber, setCardNumber] = useState<string>("");
+  const [expiry, setExpiry] = useState<string>("");
+  const [cvv, setCvv] = useState<string>("");
 
   if (!cartItem) {
     return (
@@ -73,7 +73,6 @@ export default function CheckoutPage({
   const handleAuthorizePaymentCombined = () => {
     setPaymentStep("processing");
     
-    // Simulate high-security Razorpay payment gateway API integration
     setTimeout(() => {
       setPaymentStep("success");
       

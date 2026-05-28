@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } fr
 import { useRouter } from "expo-router";
 import { ShieldCheck, Truck, CreditCard, Sparkles, AlertCircle } from "lucide-react-native";
 import { useFitStore } from "../../store/useFitStore";
+import { apiService } from "../../services/api";
 
 export default function MobileCheckout() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function MobileCheckout() {
 
   const [paying, setPaying] = React.useState(false);
 
-  const handleProcessSecurePayment = () => {
+  const handleProcessSecurePayment = async () => {
     if (!cart) return;
     if (!activeProfile) {
       Alert.alert("Bespoke Alignment Needed", "Please configure a TrueFit sizing profile before payment.");
@@ -19,23 +20,21 @@ export default function MobileCheckout() {
 
     setPaying(true);
 
-    // Simulator for Razorpay overlay logic
-    setTimeout(() => {
-      setPaying(false);
-
-      const generatedOrder = {
-        id: "ord-" + Math.floor(100 + Math.random() * 900),
+    try {
+      const orderPayload = {
         product: cart.product,
         selectedFabric: cart.fabric,
         selectedColor: cart.color,
         fitProfile: activeProfile,
         customizations: cart.customizations,
-        totalPrice: cart.finalPrice + 250, // includes luxury lining levies
+        totalPrice: cart.finalPrice + 250,
         status: "Order Received" as const,
         date: new Date().toISOString().split("T")[0],
         estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       };
 
+      const generatedOrder = await apiService.createOrder(orderPayload);
+      setPaying(false);
       placeOrder(generatedOrder);
       clearCart();
 
@@ -44,7 +43,10 @@ export default function MobileCheckout() {
         "Your payment was validated successfully. Your drafting pattern queued on master tailor bench #4.",
         [{ text: "Track Progress", onPress: () => router.push("/orders") }]
       );
-    }, 2000);
+    } catch (error) {
+      setPaying(false);
+      Alert.alert("Order Failed", error instanceof Error ? error.message : "Unable to create order.");
+    }
   };
 
   if (!cart) {

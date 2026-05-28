@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, Image } fro
 import { useRouter } from "expo-router";
 import { Sparkles, ArrowLeft, Check, Compass, Cpu, HelpCircle } from "lucide-react-native";
 import { useFitStore } from "../../store/useFitStore";
+import { apiService } from "../../services/api";
 
 export default function MobileMeasurementFlow() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function MobileMeasurementFlow() {
 
   const [preference, setPreference] = React.useState<"Slim Fit" | "Regular Fit" | "Relaxed Fit">("Slim Fit");
 
-  const handleFinishCalibration = () => {
+  const handleFinishCalibration = async () => {
     const numHeight = Number(height) || 165;
     const numWeight = Number(weight) || 55;
     const numChest = Number(chest) || 34;
@@ -47,8 +48,14 @@ export default function MobileMeasurementFlow() {
       createdOn: new Date().toISOString().split("T")[0]
     };
 
-    addProfile(newProfile);
-    setActiveProfile(newProfile);
+    try {
+      const savedProfile = await apiService.saveFitProfile(newProfile);
+      addProfile(savedProfile);
+      setActiveProfile(savedProfile);
+    } catch (error) {
+      Alert.alert("Profile Save Failed", error instanceof Error ? error.message : "Unable to save measurements.");
+      return;
+    }
 
     Alert.alert(
       "TrueFit Calibrated",

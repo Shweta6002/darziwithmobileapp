@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MOCK_PRODUCTS, MOCK_FABRICS, Product } from "../types";
+import { MOCK_FABRICS, Product } from "../types";
 import { Filter, Star, Ruler, ArrowUpRight, Search, Heart } from "lucide-react";
 import React, { useState } from "react";
 
@@ -13,7 +13,7 @@ interface ProductListingPageProps {
 }
 
 export default function ProductListingPage({ 
-  products = MOCK_PRODUCTS, 
+  products = [], 
   onSelectProduct 
 }: ProductListingPageProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");

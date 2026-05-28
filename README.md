@@ -21,22 +21,25 @@ The backend now includes a production-oriented commerce API scaffold for authent
 **Prerequisites:**  Node.js
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the website with backend APIs:
-   `npm run dev`
-4. Run only the website dev server:
-   `npm run dev:web`
+   `npm --prefix apps/backend install`
+   `npm --prefix apps/web install`
+2. Create separate env files:
+   `cp apps/backend/.env.example apps/backend/.env`
+   `cp apps/web/.env.example apps/web/.env`
+3. Set `GEMINI_API_KEY` in `apps/backend/.env` if you use Gemini features.
+4. Run backend and web on separate ports:
+   `npm --prefix apps/backend run dev`
+   `npm --prefix apps/web run dev`
 5. Run the mobile app:
    `cd apps/mobile && npm install && npm start`
 
 ## Backend API
 
-- Health: `GET /api/v1/health`
+- Health: `GET /api/darzi/v1/health`
 - Swagger docs: `GET /api/docs`
-- Product list compatible with current frontend: `GET /api/v1/products`
+- Product list compatible with current frontend: `GET /api/darzi/v1/products`
 - AI advisor compatibility routes: `POST /api/gemini/consult`, `POST /api/gemini/analyze-measurements`
 
 For local infrastructure:
 
-`docker compose up --build`
+`cd apps/backend && docker compose up --build`
